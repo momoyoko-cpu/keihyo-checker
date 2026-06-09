@@ -27,14 +27,30 @@
           </div>
         </div>
 
-        <div id="dropzone" class="dropzone">
-          <div class="dz-inner">
-            <div class="dz-icon">📄</div>
-            <p class="dz-title">ファイルをここにドラッグ＆ドロップ</p>
-            <p class="dz-or">または</p>
-            <button id="browse-btn" type="button" class="btn">ファイルを選択</button>
-            <input id="file-input" type="file" accept=".pdf,.pptx,.ppt" hidden />
-            <p class="dz-note">対応形式: PDF / PowerPoint(.pptx, .ppt)　最大50MB</p>
+        <!-- 入力方法の切替 -->
+        <div class="input-tabs">
+          <button id="tab-file" type="button" class="input-tab active">📄 ファイルをアップロード</button>
+          <button id="tab-text" type="button" class="input-tab">📝 テキストを貼り付け</button>
+        </div>
+
+        <div id="file-pane">
+          <div id="dropzone" class="dropzone">
+            <div class="dz-inner">
+              <div class="dz-icon">📄</div>
+              <p class="dz-title">ファイルをここにドラッグ＆ドロップ</p>
+              <p class="dz-or">または</p>
+              <button id="browse-btn" type="button" class="btn">ファイルを選択</button>
+              <input id="file-input" type="file" accept=".pdf,.pptx,.ppt,.docx,.doc,.rtf,.txt" hidden />
+              <p class="dz-note">対応形式: PDF / PowerPoint(.pptx,.ppt) / Word(.docx,.doc,.rtf) / テキスト(.txt)　最大50MB</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="text-pane" class="hidden">
+          <div class="text-input-box">
+            <input id="text-title" type="text" class="text-title" placeholder="タイトル（任意・例: 新商品プレスリリース案）" />
+            <textarea id="text-area" class="text-area" placeholder="プレスリリース案などのテキストをここに貼り付けてください。&#10;景表法・特商法などの観点でチェックします。"></textarea>
+            <button id="text-submit" type="button" class="btn btn-primary">このテキストをチェック</button>
           </div>
         </div>
       </section>

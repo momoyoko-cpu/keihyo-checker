@@ -1,6 +1,10 @@
 // 景表法チェックツール フロントエンド
 const $ = (id) => document.getElementById(id);
 
+// 重要度の表示ラベル（内部値は 高/中/低 のまま）
+const SEV_LABEL = { 高: "必須", 中: "推奨（強）", 低: "推奨（弱）" };
+const sevLabel = (s) => SEV_LABEL[s] || s;
+
 const sections = {
   upload: $("upload-section"),
   loading: $("loading-section"),
@@ -85,6 +89,32 @@ dropzone.addEventListener("drop", (e) => {
   if (file) uploadFile(file);
 });
 
+// ---- 入力方法タブ（ファイル / テキスト）----
+$("tab-file").addEventListener("click", () => switchTab("file"));
+$("tab-text").addEventListener("click", () => switchTab("text"));
+function switchTab(which) {
+  const isFile = which === "file";
+  $("tab-file").classList.toggle("active", isFile);
+  $("tab-text").classList.toggle("active", !isFile);
+  $("file-pane").classList.toggle("hidden", !isFile);
+  $("text-pane").classList.toggle("hidden", isFile);
+}
+
+// ---- テキスト貼り付けチェック ----
+$("text-submit").addEventListener("click", () => {
+  const text = $("text-area").value.trim();
+  if (!text) return showError("テキストを入力してください。");
+  const { industry, laws } = getSelection();
+  const fd = new FormData();
+  fd.append("text", text);
+  fd.append("title", $("text-title").value.trim());
+  fd.append("industry", industry);
+  fd.append("laws", JSON.stringify(laws));
+  show("loading");
+  setLoadingText("テキストを処理中…");
+  runCheck(fd);
+});
+
 $("retry-btn").addEventListener("click", () => show("upload"));
 $("new-btn").addEventListener("click", () => {
   fileInput.value = "";
@@ -96,9 +126,9 @@ $("download-btn").addEventListener("click", () => {
 
 // ---- アップロード&解析 ----
 async function uploadFile(file) {
-  const okExt = /\.(pdf|pptx|ppt)$/i.test(file.name);
+  const okExt = /\.(pdf|pptx|ppt|docx|doc|rtf|txt)$/i.test(file.name);
   if (!okExt) {
-    return showError("PDF または PowerPoint(.pptx/.ppt) を選択してください。");
+    return showError("対応形式: PDF / PowerPoint / Word / テキスト(.txt) を選択してください。");
   }
   show("loading");
   setLoadingText("アップロード中…");
@@ -107,6 +137,11 @@ async function uploadFile(file) {
   const { industry, laws } = getSelection();
   fd.append("industry", industry);
   fd.append("laws", JSON.stringify(laws));
+  runCheck(fd);
+}
+
+// 解析の開始（POST）→ ポーリング、の共通処理
+async function runCheck(fd) {
   try {
     const resp = await fetch("/api/check", { method: "POST", body: fd });
     const data = await resp.json();
@@ -178,9 +213,9 @@ function renderResult(data) {
     badges.innerHTML = `<span class="badge none">指摘なし</span>`;
   } else {
     badges.innerHTML =
-      `<span class="badge high">高 ${counts["高"] || 0}</span>` +
-      `<span class="badge mid">中 ${counts["中"] || 0}</span>` +
-      `<span class="badge low">低 ${counts["低"] || 0}</span>`;
+      `<span class="badge high">必須 ${counts["高"] || 0}</span>` +
+      `<span class="badge mid">推奨（強） ${counts["中"] || 0}</span>` +
+      `<span class="badge low">推奨（弱） ${counts["低"] || 0}</span>`;
   }
 
   renderPages(data.pages);
@@ -256,7 +291,7 @@ function renderFindings(pages) {
       const lawTag = f.law ? `<span class="fc-law">${escapeHtml(f.law)}</span>` : "";
       card.innerHTML = `
         <div class="fc-head">
-          <span class="sev-pill ${f.severity}">${f.severity}</span>
+          <span class="sev-pill ${f.severity}">${sevLabel(f.severity)}</span>
           ${lawTag}
           <span class="fc-cat">${escapeHtml(f.category)}</span>
           <span class="fc-page">P${p.page} / #${i + 1}</span>

@@ -55,16 +55,10 @@ app.get("/api/profiles", async (_req, res) => {
 
 // ファイルチェック（非同期開始）。即座にジョブIDを返し、バックグラウンドで解析する。
 // 進捗は GET /api/status/:id でポーリングする（長時間処理でHTTPタイムアウトしないため）。
-app.post("/api/check", upload.single("file"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "ファイルがありません。" });
-  // multer/busboy はファイル名を latin1 で解釈するため、UTF-8 に直す（日本語ファイル名の文字化け対策）
-  const originalName = decodeFileName(req.file.originalname);
-  const ext = path.extname(originalName).toLowerCase();
-  if (![".pdf", ".pptx", ".ppt"].includes(ext)) {
-    await safeUnlink(req.file.path);
-    return res.status(400).json({ error: "PDF または PowerPoint(.pptx/.ppt) をアップロードしてください。" });
-  }
+// 受付可能なアップロード拡張子
+const ACCEPTED_EXTS = [".pdf", ".pptx", ".ppt", ".docx", ".doc", ".rtf", ".odt", ".odp", ".txt"];
 
+app.post("/api/check", upload.single("file"), async (req, res) => {
   // プロファイル選択（業種・追加法令）をフォームから受け取る
   const industry = req.body.industry || "general";
   let laws = [];
@@ -74,12 +68,32 @@ app.post("/api/check", upload.single("file"), async (req, res) => {
     laws = [];
   }
 
+  const pastedText = (req.body.text || "").trim();
+
+  let source; // { kind:'file', uploadPath, ext, originalName } | { kind:'text', text, originalName }
+  if (req.file) {
+    // multer/busboy はファイル名を latin1 で解釈するため、UTF-8 に直す（日本語ファイル名の文字化け対策）
+    const originalName = decodeFileName(req.file.originalname);
+    const ext = path.extname(originalName).toLowerCase();
+    if (!ACCEPTED_EXTS.includes(ext)) {
+      await safeUnlink(req.file.path);
+      return res.status(400).json({
+        error: "対応形式: PDF / PowerPoint(.pptx,.ppt) / Word(.docx,.doc,.rtf) / テキスト(.txt)",
+      });
+    }
+    source = { kind: "file", uploadPath: req.file.path, ext, originalName };
+  } else if (pastedText) {
+    const title = (req.body.title || "").trim();
+    source = { kind: "text", text: pastedText, originalName: (title || "テキスト入力") + ".txt" };
+  } else {
+    return res.status(400).json({ error: "ファイルをアップロードするか、テキストを入力してください。" });
+  }
+
   const id = randomUUID();
-  const uploadPath = req.file.path;
   jobs.set(id, {
     status: "processing",
     progress: { phase: "準備中", done: 0, total: 0 },
-    meta: { fileName: originalName, model: MODEL },
+    meta: { fileName: source.originalName, model: MODEL },
     results: null,
     error: null,
     createdAt: Date.now(),
@@ -89,7 +103,7 @@ app.post("/api/check", upload.single("file"), async (req, res) => {
   res.status(202).json({ id });
 
   // バックグラウンド処理（awaitしない）
-  processJob(id, { uploadPath, ext, originalName, industry, laws }).catch((err) => {
+  processJob(id, { source, industry, laws }).catch((err) => {
     const job = jobs.get(id);
     if (job) {
       job.status = "error";
@@ -99,16 +113,30 @@ app.post("/api/check", upload.single("file"), async (req, res) => {
   });
 });
 
-async function processJob(id, { uploadPath, ext, originalName, industry, laws }) {
+async function processJob(id, { source, industry, laws }) {
   const job = jobs.get(id);
   let workDir;
   try {
     workDir = await makeWorkDir();
-    const inputPath = path.join(workDir, `input${ext}`);
-    await fs.copyFile(uploadPath, inputPath);
+
+    // 入力を workDir に用意する（PDF化のソース）
+    let conversionPath; // ensurePdf に渡すパス
+    if (source.kind === "text") {
+      // 貼り付けテキストは UTF-8 を確実に保つため HTML にラップして変換する
+      conversionPath = path.join(workDir, "input.html");
+      await fs.writeFile(conversionPath, textToHtml(source.text), "utf8");
+    } else if (source.ext === ".txt") {
+      // .txt は文字コードの取り違えを防ぐため UTF-8 として読み、HTML にラップ
+      const raw = await fs.readFile(source.uploadPath, "utf8");
+      conversionPath = path.join(workDir, "input.html");
+      await fs.writeFile(conversionPath, textToHtml(raw), "utf8");
+    } else {
+      conversionPath = path.join(workDir, `input${source.ext}`);
+      await fs.copyFile(source.uploadPath, conversionPath);
+    }
 
     job.progress.phase = "ページの画像化・テキスト抽出中";
-    const pdfPath = await ensurePdf(inputPath, workDir);
+    const pdfPath = await ensurePdf(conversionPath, workDir);
     const [pages, wordsByPage] = await Promise.all([
       renderPages(pdfPath, workDir),
       extractWords(pdfPath, workDir),
@@ -126,7 +154,7 @@ async function processJob(id, { uploadPath, ext, originalName, industry, laws })
     );
 
     job.meta = {
-      fileName: originalName,
+      fileName: source.originalName,
       model: MODEL,
       generatedAt: new Date().toLocaleString("ja-JP"),
       scopeText: scope.scopeText,
@@ -135,7 +163,7 @@ async function processJob(id, { uploadPath, ext, originalName, industry, laws })
     job.results = results;
     job.status = "done";
   } finally {
-    await safeUnlink(uploadPath);
+    if (source.kind === "file") await safeUnlink(source.uploadPath);
     if (workDir) await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
 }
@@ -189,6 +217,21 @@ app.get("/api/report/:id", async (req, res) => {
 async function safeUnlink(p) {
   if (!p) return;
   await fs.unlink(p).catch(() => {});
+}
+
+// 貼り付けテキスト/.txt を、UTF-8 を保ったまま LibreOffice で PDF 化するための HTML にラップする。
+function textToHtml(text) {
+  const escaped = String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line || "&nbsp;")
+    .join("<br>");
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+body{font-family:'Noto Sans CJK JP','sans-serif';font-size:12pt;line-height:1.7;margin:30px;color:#111;}
+</style></head><body>${escaped}</body></html>`;
 }
 
 // multer/busboy が latin1 で解釈したファイル名を UTF-8 に復元する。

@@ -65,8 +65,33 @@ async function main() {
   // レポートDLも確認
   const rep = await fetch(`${BASE}/api/report/${start.id}`);
   console.log("レポートDL:", rep.status, rep.headers.get("content-type"), `${(await rep.arrayBuffer()).byteLength} bytes`);
-
   await fs.unlink(tmp).catch(() => {});
+
+  // ===== テキスト貼り付け経路の検証 =====
+  console.log("\n--- テキスト貼り付け経路 ---");
+  const press = "【新商品プレスリリース】\n当社の新サプリは業界No.1の効果で、飲むだけで誰でも必ず痩せます。\n今なら初回無料でお試しいただけます。";
+  const tf = new FormData();
+  tf.append("text", press);
+  tf.append("title", "新商品プレスリリース案");
+  tf.append("industry", "general");
+  tf.append("laws", JSON.stringify([]));
+  const tr = await fetch(`${BASE}/api/check`, { method: "POST", body: tf });
+  const ts = await tr.json();
+  console.log("  POST →", tr.status, JSON.stringify(ts));
+  let tres;
+  for (let i = 0; i < 120; i++) {
+    await new Promise((s) => setTimeout(s, 2000));
+    const sd = await (await fetch(`${BASE}/api/status/${ts.id}`)).json();
+    if (sd.status === "processing") { process.stdout.write(`\r  ${sd.progress?.phase} ${sd.progress?.done||0}/${sd.progress?.total||0}   `); continue; }
+    tres = sd; break;
+  }
+  console.log("");
+  if (!tres || tres.status !== "done") throw new Error("テキスト経路失敗: " + JSON.stringify(tres));
+  console.log("  ファイル名:", tres.meta.fileName);
+  console.log("  ページ要約(日本語が化けていないか):", tres.pages[0].page_summary);
+  console.log("  指摘数:", tres.pages[0].findings.length);
+  tres.pages[0].findings.forEach((f, i) => console.log(`    [${i + 1}] 【${f.severity}】${f.category}: 「${f.quote}」`));
+
   console.log("\ne2e 完了");
 }
 main().catch((e) => { console.error("\ne2e失敗:", e); process.exit(1); });

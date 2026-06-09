@@ -73,6 +73,39 @@ main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 60px; }
 .law-check { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
 .law-check input { cursor: pointer; }
 
+/* 入力方法タブ */
+.input-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.input-tab {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.input-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+
+/* テキスト入力 */
+.text-input-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.text-title {
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+}
+.text-area {
+  width: 100%; min-height: 240px; resize: vertical;
+  padding: 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; line-height: 1.7; font-family: inherit;
+}
+.text-input-box .btn-primary { align-self: flex-start; }
+
 /* ドロップゾーン */
 .dropzone {
   border: 2px dashed #b8c0cc;
@@ -202,7 +235,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 60px; }
 .finding-card.sev-中 { border-left-color: var(--mid); }
 .finding-card.sev-低 { border-left-color: var(--low); }
 .fc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.sev-pill { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; color: #fff; }
+.sev-pill { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; color: #fff; white-space: nowrap; }
 .sev-pill.高 { background: var(--high); }
 .sev-pill.中 { background: var(--mid); }
 .sev-pill.低 { background: var(--low); }
