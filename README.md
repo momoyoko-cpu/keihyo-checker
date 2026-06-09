@@ -1,5 +1,7 @@
 # 景表チェッカー
 
+公開URL: https://keihyo-checker-production.up.railway.app
+
 PDF / PowerPoint をアップロードすると、**Claude（AI）が景表法・特商法などの不当表示のおそれを検出**し、
 ページ画像上にハイライト表示・文字サイズの可視化を行い、**PDF指摘レポート**をダウンロードできる Web アプリです。
 
