@@ -59,7 +59,9 @@ app.get("/api/profiles", async (_req, res) => {
 // ファイルチェック
 app.post("/api/check", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "ファイルがありません。" });
-  const ext = path.extname(req.file.originalname).toLowerCase();
+  // multer/busboy はファイル名を latin1 で解釈するため、UTF-8 に直す（日本語ファイル名の文字化け対策）
+  const originalName = decodeFileName(req.file.originalname);
+  const ext = path.extname(originalName).toLowerCase();
   if (![".pdf", ".pptx", ".ppt"].includes(ext)) {
     await safeUnlink(req.file.path);
     return res.status(400).json({ error: "PDF または PowerPoint(.pptx/.ppt) をアップロードしてください。" });
@@ -98,7 +100,7 @@ app.post("/api/check", upload.single("file"), async (req, res) => {
 
     const id = randomUUID();
     const meta = {
-      fileName: req.file.originalname,
+      fileName: originalName,
       model: MODEL,
       generatedAt: new Date().toLocaleString("ja-JP"),
       scopeText: scope.scopeText,
@@ -151,6 +153,19 @@ app.get("/api/report/:id", async (req, res) => {
 async function safeUnlink(p) {
   if (!p) return;
   await fs.unlink(p).catch(() => {});
+}
+
+// multer/busboy が latin1 で解釈したファイル名を UTF-8 に復元する。
+// 既に正しいUTF-8の場合に壊さないよう、latin1→utf8 変換で不正文字(�)が出る場合は元のまま返す。
+function decodeFileName(name) {
+  if (!name) return "file";
+  try {
+    const decoded = Buffer.from(name, "latin1").toString("utf8");
+    if (decoded.includes("�")) return name;
+    return decoded;
+  } catch {
+    return name;
+  }
 }
 
 app.listen(PORT, () => {
