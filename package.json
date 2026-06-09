@@ -1,8 +1,8 @@
 {
-  "name": "keihyo-check-tool",
+  "name": "keihyo-checker",
   "version": "0.1.0",
   "private": true,
-  "description": "景品表示法（景表法）チェックツール - PDF/PowerPointをアップロードしてAIが不当表示の疑いを検出",
+  "description": "景表チェッカー - PDF/PowerPointをアップロードしてAIが景表法・特商法等の不当表示の疑いを検出",
   "type": "module",
   "engines": {
     "node": ">=20"

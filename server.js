@@ -154,7 +154,7 @@ async function safeUnlink(p) {
 }
 
 app.listen(PORT, () => {
-  console.log(`景表法チェックツール listening on http://localhost:${PORT}`);
+  console.log(`景表チェッカー listening on http://localhost:${PORT}`);
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn("[警告] ANTHROPIC_API_KEY が未設定です。/api/check は失敗します。");
   }
