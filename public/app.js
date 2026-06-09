@@ -101,6 +101,7 @@ async function uploadFile(file) {
     return showError("PDF または PowerPoint(.pptx/.ppt) を選択してください。");
   }
   show("loading");
+  setLoadingText("アップロード中…");
   const fd = new FormData();
   fd.append("file", file);
   const { industry, laws } = getSelection();
@@ -109,10 +110,51 @@ async function uploadFile(file) {
   try {
     const resp = await fetch("/api/check", { method: "POST", body: fd });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "解析に失敗しました。");
-    renderResult(data);
+    if (!resp.ok) throw new Error(data.error || "解析の開始に失敗しました。");
+    await pollStatus(data.id);
   } catch (err) {
     showError(err.message || String(err));
+  }
+}
+
+function setLoadingText(msg) {
+  const el = $("loading-text");
+  if (el) el.textContent = msg;
+}
+
+// 解析ジョブの進捗をポーリングし、完了したら結果を描画する
+async function pollStatus(id) {
+  let consecutiveErrors = 0;
+  while (true) {
+    await new Promise((r) => setTimeout(r, 2000));
+    let data;
+    try {
+      const resp = await fetch(`/api/status/${id}`);
+      data = await resp.json();
+      consecutiveErrors = 0;
+    } catch {
+      // 一時的な通信エラーは数回まで許容
+      if (++consecutiveErrors >= 5) {
+        return showError("サーバとの通信が途切れました。時間をおいて再度お試しください。");
+      }
+      continue;
+    }
+    if (data.status === "processing") {
+      const p = data.progress || {};
+      if (p.total) {
+        setLoadingText(`${p.phase || "解析中"}　${p.done}/${p.total} ページ`);
+      } else {
+        setLoadingText(p.phase || "解析中…");
+      }
+      continue;
+    }
+    if (data.status === "error") {
+      return showError(data.error || "解析に失敗しました。");
+    }
+    if (data.status === "done") {
+      return renderResult(data);
+    }
+    return showError("予期しない応答を受け取りました。");
   }
 }
 

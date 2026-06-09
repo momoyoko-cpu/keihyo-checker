@@ -33,9 +33,6 @@ app.use(express.json({ limit: "1mb" }));
 // 解析結果の一時保管（メモリ）。一定時間で破棄。
 const jobs = new Map();
 const JOB_TTL_MS = 60 * 60 * 1000; // 1時間
-function putJob(id, data) {
-  jobs.set(id, { ...data, createdAt: Date.now() });
-}
 setInterval(() => {
   const now = Date.now();
   for (const [id, j] of jobs) {
@@ -56,7 +53,8 @@ app.get("/api/profiles", async (_req, res) => {
   }
 });
 
-// ファイルチェック
+// ファイルチェック（非同期開始）。即座にジョブIDを返し、バックグラウンドで解析する。
+// 進捗は GET /api/status/:id でポーリングする（長時間処理でHTTPタイムアウトしないため）。
 app.post("/api/check", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "ファイルがありません。" });
   // multer/busboy はファイル名を latin1 で解釈するため、UTF-8 に直す（日本語ファイル名の文字化け対策）
@@ -76,59 +74,97 @@ app.post("/api/check", upload.single("file"), async (req, res) => {
     laws = [];
   }
 
+  const id = randomUUID();
+  const uploadPath = req.file.path;
+  jobs.set(id, {
+    status: "processing",
+    progress: { phase: "準備中", done: 0, total: 0 },
+    meta: { fileName: originalName, model: MODEL },
+    results: null,
+    error: null,
+    createdAt: Date.now(),
+  });
+
+  // 先にIDを返す（クライアントはポーリングへ）
+  res.status(202).json({ id });
+
+  // バックグラウンド処理（awaitしない）
+  processJob(id, { uploadPath, ext, originalName, industry, laws }).catch((err) => {
+    const job = jobs.get(id);
+    if (job) {
+      job.status = "error";
+      job.error = String(err?.message || err);
+    }
+    console.error(`[job ${id}] failed:`, err);
+  });
+});
+
+async function processJob(id, { uploadPath, ext, originalName, industry, laws }) {
+  const job = jobs.get(id);
   let workDir;
   try {
     workDir = await makeWorkDir();
-    // 元ファイルを正しい拡張子で作業ディレクトリにコピー
     const inputPath = path.join(workDir, `input${ext}`);
-    await fs.copyFile(req.file.path, inputPath);
+    await fs.copyFile(uploadPath, inputPath);
 
+    job.progress.phase = "ページの画像化・テキスト抽出中";
     const pdfPath = await ensurePdf(inputPath, workDir);
     const [pages, wordsByPage] = await Promise.all([
       renderPages(pdfPath, workDir),
       extractWords(pdfPath, workDir),
     ]);
+    if (!pages.length) throw new Error("ページを読み取れませんでした。");
 
-    if (!pages.length) {
-      throw new Error("ページを読み取れませんでした。");
-    }
+    job.progress = { phase: "AI判定中", done: 0, total: pages.length };
+    const { results, scope } = await analyzeDocument(
+      pages,
+      wordsByPage,
+      (done, total) => {
+        job.progress = { phase: "AI判定中", done, total };
+      },
+      { industry, laws }
+    );
 
-    const { results, scope } = await analyzeDocument(pages, wordsByPage, null, {
-      industry,
-      laws,
-    });
-
-    const id = randomUUID();
-    const meta = {
+    job.meta = {
       fileName: originalName,
       model: MODEL,
       generatedAt: new Date().toLocaleString("ja-JP"),
       scopeText: scope.scopeText,
       lawLabels: scope.lawLabels,
     };
-    putJob(id, { results, meta });
-
-    // クライアントには表示用に画像と指摘を返す
-    res.json({
-      id,
-      meta,
-      pages: results.map((r) => ({
-        page: r.page,
-        widthPx: r.widthPx,
-        heightPx: r.heightPx,
-        imageBase64: r.imageBase64,
-        page_summary: r.page_summary,
-        error: r.error || null,
-        findings: r.findings,
-      })),
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: String(err?.message || err) });
+    job.results = results;
+    job.status = "done";
   } finally {
-    await safeUnlink(req.file?.path);
+    await safeUnlink(uploadPath);
     if (workDir) await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+// 解析の進捗・結果を取得
+app.get("/api/status/:id", (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "ジョブが見つかりません（期限切れの可能性）。" });
+  if (job.status === "processing") {
+    return res.json({ status: "processing", progress: job.progress });
+  }
+  if (job.status === "error") {
+    return res.json({ status: "error", error: job.error });
+  }
+  // done
+  res.json({
+    status: "done",
+    id: req.params.id,
+    meta: job.meta,
+    pages: job.results.map((r) => ({
+      page: r.page,
+      widthPx: r.widthPx,
+      heightPx: r.heightPx,
+      imageBase64: r.imageBase64,
+      page_summary: r.page_summary,
+      error: r.error || null,
+      findings: r.findings,
+    })),
+  });
 });
 
 // PDFレポートのダウンロード
