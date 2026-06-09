@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>景品表示法 チェックツール</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>景品表示法 チェックツール</h1>
+      <p class="sub">PDF / PowerPoint をアップロードすると、AIが景表法上の不当表示のおそれを検出します</p>
+    </header>
+
+    <main>
+      <!-- アップロード -->
+      <section id="upload-section">
+        <div class="config-panel">
+          <div class="config-row">
+            <label for="industry-select">業種プロファイル</label>
+            <select id="industry-select"></select>
+            <span id="industry-desc" class="config-desc"></span>
+          </div>
+          <div class="config-row">
+            <label>併用してチェックする法令</label>
+            <div id="laws-checkboxes" class="laws-checkboxes"></div>
+          </div>
+        </div>
+
+        <div id="dropzone" class="dropzone">
+          <div class="dz-inner">
+            <div class="dz-icon">📄</div>
+            <p class="dz-title">ファイルをここにドラッグ＆ドロップ</p>
+            <p class="dz-or">または</p>
+            <button id="browse-btn" type="button" class="btn">ファイルを選択</button>
+            <input id="file-input" type="file" accept=".pdf,.pptx,.ppt" hidden />
+            <p class="dz-note">対応形式: PDF / PowerPoint(.pptx, .ppt)　最大50MB</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 処理中 -->
+      <section id="loading-section" class="hidden">
+        <div class="spinner"></div>
+        <p id="loading-text">解析中です…</p>
+        <p class="loading-note">ページ数や内容により1〜数分かかることがあります。</p>
+      </section>
+
+      <!-- エラー -->
+      <section id="error-section" class="hidden">
+        <div class="error-box">
+          <p id="error-text"></p>
+          <button id="retry-btn" class="btn">最初に戻る</button>
+        </div>
+      </section>
+
+      <!-- 結果 -->
+      <section id="result-section" class="hidden">
+        <div class="result-toolbar">
+          <div class="result-meta">
+            <span id="result-filename"></span>
+            <span id="result-scope" class="result-scope"></span>
+            <span id="result-summary" class="summary-badges"></span>
+          </div>
+          <div class="result-actions">
+            <button id="download-btn" class="btn btn-primary">📥 PDFレポートをダウンロード</button>
+            <button id="new-btn" class="btn">別のファイルをチェック</button>
+          </div>
+        </div>
+
+        <div class="result-body">
+          <!-- 左: ページ画像 + ハイライト -->
+          <div id="pages-pane" class="pages-pane"></div>
+          <!-- 右: 指摘一覧 -->
+          <aside id="findings-pane" class="findings-pane"></aside>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>
+        本ツールはAIによる一次チェックです。最終判断は条文原文の確認・専門家への相談を推奨します。
+        根拠: e-Gov法令検索（不当景品類及び不当表示防止法）／消費者庁ガイドライン。
+      </p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

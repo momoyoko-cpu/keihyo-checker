@@ -1,0 +1,30 @@
+{
+  "industries": [
+    {
+      "id": "general",
+      "label": "一般（業種指定なし）",
+      "description": "業種を限定せず景表法の基本観点でチェック",
+      "module": null
+    },
+    {
+      "id": "finance",
+      "label": "金融・投資",
+      "description": "投資信託・保険・FX・暗号資産・投資用不動産など。利回り/リスク表示/断定的表現を重点チェック",
+      "module": "industries/finance.md"
+    },
+    {
+      "id": "realestate",
+      "label": "不動産",
+      "description": "売買・賃貸・投資用物件。おとり広告/徒歩分数/新築要件/二重価格を重点チェック（公正競争規約準拠）",
+      "module": "industries/realestate.md"
+    }
+  ],
+  "laws": [
+    {
+      "id": "tokushoho",
+      "label": "特定商取引法",
+      "description": "通信販売の表示義務・誇大広告・定期購入(定期縛り)規制を併用チェック",
+      "module": "laws/tokushoho.md"
+    }
+  ]
+}

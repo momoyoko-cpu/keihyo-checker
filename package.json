@@ -1,0 +1,20 @@
+{
+  "name": "keihyo-check-tool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "景品表示法（景表法）チェックツール - PDF/PowerPointをアップロードしてAIが不当表示の疑いを検出",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
+    "express": "^4.21.2",
+    "multer": "^2.0.1",
+    "pdfkit": "^0.15.1"
+  }
+}
