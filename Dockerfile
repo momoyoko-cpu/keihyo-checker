@@ -5,6 +5,7 @@ FROM node:20-bookworm-slim
 # システム依存をインストール
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libreoffice-impress \
+      libreoffice-writer \
       libreoffice-core \
       poppler-utils \
       fonts-noto-cjk \
