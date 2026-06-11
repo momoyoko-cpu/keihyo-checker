@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libreoffice-core \
       poppler-utils \
       fonts-noto-cjk \
+      fonts-ipafont-gothic \
       fontconfig \
     && rm -rf /var/lib/apt/lists/*
 

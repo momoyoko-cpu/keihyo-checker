@@ -14,6 +14,7 @@ import {
 } from "./lib/extract.js";
 import { analyzeDocument, loadProfiles, MODEL } from "./lib/analyze.js";
 import { buildReport } from "./lib/report.js";
+import { textToPdf } from "./lib/textPdf.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -119,24 +120,23 @@ async function processJob(id, { source, industry, laws }) {
   try {
     workDir = await makeWorkDir();
 
-    // 入力を workDir に用意する（PDF化のソース）
-    let conversionPath; // ensurePdf に渡すパス
-    if (source.kind === "text") {
-      // 貼り付けテキストは UTF-8 を確実に保つため HTML にラップして変換する
-      conversionPath = path.join(workDir, "input.html");
-      await fs.writeFile(conversionPath, textToHtml(source.text), "utf8");
-    } else if (source.ext === ".txt") {
-      // .txt は文字コードの取り違えを防ぐため UTF-8 として読み、HTML にラップ
-      const raw = await fs.readFile(source.uploadPath, "utf8");
-      conversionPath = path.join(workDir, "input.html");
-      await fs.writeFile(conversionPath, textToHtml(raw), "utf8");
-    } else {
-      conversionPath = path.join(workDir, `input${source.ext}`);
-      await fs.copyFile(source.uploadPath, conversionPath);
-    }
-
     job.progress.phase = "ページの画像化・テキスト抽出中";
-    const pdfPath = await ensurePdf(conversionPath, workDir);
+
+    // 入力を PDF にする。
+    // テキスト系は LibreOffice の自動ページ割り（空白ページ・不要なページ分割）を避けるため、
+    // pdfkit で「内容の高さに合わせた1ページ」を直接生成する。
+    let pdfPath;
+    if (source.kind === "text") {
+      pdfPath = await textToPdf(source.text, workDir);
+    } else if (source.ext === ".txt") {
+      // .txt は文字コードの取り違えを防ぐため UTF-8 として読む
+      const raw = await fs.readFile(source.uploadPath, "utf8");
+      pdfPath = await textToPdf(raw, workDir);
+    } else {
+      const conversionPath = path.join(workDir, `input${source.ext}`);
+      await fs.copyFile(source.uploadPath, conversionPath);
+      pdfPath = await ensurePdf(conversionPath, workDir);
+    }
     const [pages, wordsByPage] = await Promise.all([
       renderPages(pdfPath, workDir),
       extractWords(pdfPath, workDir),
@@ -217,21 +217,6 @@ app.get("/api/report/:id", async (req, res) => {
 async function safeUnlink(p) {
   if (!p) return;
   await fs.unlink(p).catch(() => {});
-}
-
-// 貼り付けテキスト/.txt を、UTF-8 を保ったまま LibreOffice で PDF 化するための HTML にラップする。
-function textToHtml(text) {
-  const escaped = String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line || "&nbsp;")
-    .join("<br>");
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-body{font-family:'Noto Sans CJK JP','sans-serif';font-size:12pt;line-height:1.7;margin:30px;color:#111;}
-</style></head><body>${escaped}</body></html>`;
 }
 
 // multer/busboy が latin1 で解釈したファイル名を UTF-8 に復元する。
